@@ -128,7 +128,7 @@ async function connectVex(){walletMessage.textContent='Menghubungkan ke VexWalle
 async function connectEth(){if(!window.ethereum)throw new Error('MetaMask tidak ditemukan.');const accounts=await window.ethereum.request({method:'eth_requestAccounts'});let chainId=(await window.ethereum.request({method:'eth_chainId'})).toLowerCase();if(chainId!==CONFIG.ethChainId){await window.ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:CONFIG.ethChainId}]});chainId=(await window.ethereum.request({method:'eth_chainId'})).toLowerCase()}const balance=await window.ethereum.request({method:'eth_getBalance',params:[accounts[0],'latest']});showWallet(accounts[0],`${(Number(BigInt(balance))/1e18).toFixed(6)} ETH`,chainId)}
 async function connect(){connectBtn.disabled=true;try{selectedMethod()==='vex'?await connectVex():await connectEth()}catch(error){walletMessage.textContent=error?.message||'Wallet gagal terhubung.'}finally{connectBtn.disabled=false}}
 function vexQuantity(value){const number=Number(value);if(!Number.isFinite(number)||number<=0)throw new Error('Jumlah VEX tidak valid.');return number.toFixed(4)}
-async function payVex(quote){if(!vexIdentity)throw new Error('Hubungkan VexWallet terlebih dahulu.');if(vexMobileBridge)throw new Error('Koneksi mobile berhasil, tetapi transfer dari DApp Browser VexWallet belum didukung oleh versi bridge ini.');const contract=await VexNet(vexNetwork).contract('vex.token');const result=await contract.transfer({from:vexIdentity.name,to:CONFIG.vexMerchant,quantity:`${vexQuantity(quote.amount)} VEX`,memo:`PULSA-${vexIdentity.name.toUpperCase()}`.slice(0,255)},{authorization:`${vexIdentity.name}@${vexIdentity.authority||'active'}`});const id=result?.transaction_id||result?.transactionId||result?.id||result?.processed?.id;if(!id)throw new Error('Transfer diproses tetapi TX ID tidak terbaca.');txInput.value=id;resultInput.value=JSON.stringify(result)}
+async function payVex(quote){if(!vexIdentity)throw new Error('Hubungkan VexWallet terlebih dahulu.');const quantity=vexQuantity(quote.amount),memo=`PULSA-${vexIdentity.name.toUpperCase()}`.slice(0,255);let result;if(vexMobileBridge){if(typeof window.pe?.pushTransfer!=='function')throw new Error('Fitur transfer VexWallet tidak tersedia. Perbarui aplikasi VexWallet.');result=await window.pe.pushTransfer({serialNumber:`pulsanium${Date.now()}${Math.floor(Math.random()*100000)}`,protocol:'TokenPocket',version:'v1.0',blockchain:'vex',action:'transfer',from:vexIdentity.name,to:CONFIG.vexMerchant,amount:quantity,quantity:`${quantity} VEX`,contract:'vex.token',symbol:'VEX',precision:4,memo});if(result?.result===0||result?.success===false||result?.code===4001)throw new Error(result?.message||'Transfer dibatalkan di VexWallet.')}else{const contract=await VexNet(vexNetwork).contract('vex.token');result=await contract.transfer({from:vexIdentity.name,to:CONFIG.vexMerchant,quantity:`${quantity} VEX`,memo},{authorization:`${vexIdentity.name}@${vexIdentity.authority||'active'}`})}const id=result?.txID||result?.txId||result?.transaction_id||result?.transactionId||result?.id||result?.data?.txID||result?.data?.transaction_id||result?.data?.transactionId||result?.processed?.id;if(!id)throw new Error(result?.message||'Transfer diproses tetapi TX ID tidak terbaca.');txInput.value=id;resultInput.value=JSON.stringify(result)}
 function ethToWeiHex(amount){const [whole,fraction='']=amount.split('.');const wei=BigInt(whole)*(10n**18n)+BigInt(fraction.padEnd(18,'0').slice(0,18));return`0x${wei.toString(16)}`}
 async function waitReceipt(hash){for(let i=0;i<48;i++){const receipt=await window.ethereum.request({method:'eth_getTransactionReceipt',params:[hash]});if(receipt){if(receipt.status!=='0x1')throw new Error('Transaksi Ethereum gagal.');return receipt}await new Promise(resolve=>setTimeout(resolve,2500))}throw new Error('Konfirmasi melewati 2 menit. Periksa MetaMask sebelum mencoba lagi.')}
 async function payEth(quote){const hash=await window.ethereum.request({method:'eth_sendTransaction',params:[{from:walletInput.value,to:CONFIG.ethMerchant,value:ethToWeiHex(quote.amount)}]});txInput.value=hash;paymentMessage.textContent=`Transaksi ${hash} dikirim. Menunggu konfirmasi...`;await waitReceipt(hash)}
@@ -138,5 +138,36 @@ document.querySelectorAll('input[name="payment_method"]').forEach(input=>input.a
 if(window.ethereum){window.ethereum.on('accountsChanged',accounts=>{if(selectedMethod()==='eth'&&!accounts.length)resetWallet()});window.ethereum.on('chainChanged',chain=>{if(selectedMethod()==='eth'){chainInput.value=chain.toLowerCase();updateSummary()}})}
 changeMethod();updateProducts();
 </script>
+
+<a href="https://www.pulsawae.com/reports/pembelian" class="pulsanium-report-link">Laporan Pembelian</a>
+<style>
+.pulsanium-report-link {
+    position: absolute;
+    top: 48px;
+    right: max(20px, calc((100vw - 1040px) / 2));
+    z-index: 1000;
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 16px;
+    border: 1px solid rgba(37, 99, 235, .18);
+    border-radius: 10px;
+    background: #ffffff;
+    color: #2563eb !important;
+    font: 600 14px/1.2 Arial, sans-serif;
+    text-decoration: none;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, .10);
+}
+.pulsanium-report-link:hover {
+    background: #eff6ff;
+}
+@media (max-width: 640px) {
+    .pulsanium-report-link {
+        top: 20px;
+        right: 16px;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+}
+</style>
 </body>
 </html>
